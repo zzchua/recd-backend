@@ -1,6 +1,7 @@
 import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
 import * as request from 'request';
+import { sendPushNotificationsToExpo } from './expo-server-helper';
 
 /**
  * Use TypeScript to write Firebase cloud functions.
@@ -10,7 +11,10 @@ import * as request from 'request';
  *    Firebase's Environment Configuration: https://firebase.google.com/docs/functions/config-env
  */
 
-admin.initializeApp();
+admin.initializeApp(functions.config().firebase);
+
+const store = admin.firestore();
+store.settings({ timestampsInSnapshots: true });
 
 /**
  * API Endpoints
@@ -45,3 +49,23 @@ export const retrieveSpotifyAccessToken = functions.https.onRequest((req, res) =
   });
 });
 
+/**
+ * This background job is triggered when a new recommendation is created for any user
+ * This job hence get the recommendation message and send it to Expo server along with the correct push tokens
+ */
+export const pushNotificationListener = functions.firestore
+  .document('user_recds/{uid}/recd_items/{rid}').onCreate((snap, context) => {
+    const receiverUid = context.params.uid;
+    const notificationMessage = snap.data().message;
+    const sender = snap.data().senderDisplayName;
+
+    store.collection('users').doc(receiverUid).get().then(doc => {
+      if (doc.exists) {
+        const pushTokens = doc.data().pushTokens;
+
+        sendPushNotificationsToExpo(sender, notificationMessage, pushTokens)
+      }
+    }).catch(reason => {
+      console.log(reason);
+    });
+  });
