@@ -1,3 +1,6 @@
 node_modules/
 lib/
 functions/.runtimeconfig.json
+
+# Google credentials
+key.json
